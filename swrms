@@ -4,19 +4,87 @@
 <meta charset="utf-8"/>
 <meta name="viewport" content="width=device-width, initial-scale=1"/>
 <title>SafeWater Live Map</title>
-<link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css"/>
-<script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
-<style> html,body,#map{height:100%;margin:0}
- .legend{background:#fff;padding:8px 12px;border-radius:8px;font:14px sans-serif;box-shadow:0 0 6px rgba(0,0,0,.3)}
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/leaflet@1.9.4/dist/leaflet.css"/>
+<script src="https://cdn.jsdelivr.net/npm/leaflet@1.9.4/dist/leaflet.js"></script>
+<style>
+  html,body,#map{height:100%;margin:0}
+  #status{position:absolute;top:8px;left:8px;z-index:9999;background:#fff;
+          padding:6px 10px;border-radius:6px;font:13px sans-serif;
+          box-shadow:0 0 6px rgba(0,0,0,.3);max-width:85%}
+  .legend{background:#fff;padding:8px 12px;border-radius:8px;font:14px sans-serif;
+          box-shadow:0 0 6px rgba(0,0,0,.3)}
 </style>
 </head>
 <body>
+<div id="status">Loading map engine…</div>
 <div id="map"></div>
 <script>
-const SHEET_URL = "https://script.google.com/macros/s/AKfycbyxC3lodKK-W_GHojDVacnA0bIHFQyo4qmmFwFDPqKOza4YudpchSbO_h6ASy-JzxCu/exec"; 
-const STATIONS = { "Buoy-01": [12.9716, 77.5946] }; // fallback for rows without GPS
+const SHEET_URL = "https://script.google.com/macros/s/AKfycbyxC3lodKK-W_GHojDVacnA0bIHFQyo4qmmFwFDPqKOza4YudpchSbO_h6ASy-JzxCu/exec";   // <-- your /exec URL
+const STATIONS = { "Buoy-01": [12.9716, 77.5946] };                     // <-- your coords + exact station name
 
-const map = L.map('map').setView([12.9716, 77.5946], 14);
+function setStatus(msg, bad){
+  const el = document.getElementById('status');
+  el.textContent = msg;
+  el.style.color = bad ? '#c0392b' : '#333';
+}
+
+if (typeof L === 'undefined') {
+  setStatus('ERROR: Leaflet library failed to load (CDN blocked?). Try mobile data or another network.', true);
+} else {
+  setStatus('Leaflet OK — loading map…');
+  const map = L.map('map').setView([12.9716, 77.5946], 13);
+  L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png',
+              { attribution: '© OpenStreetMap' }).addTo(map);
+
+  const colors = { SAFE:'#2ecc71', CAUTION:'#f1c40f', UNSAFE:'#e74c3c' };
+  const markers = L.layerGroup().addTo(map);
+  let firstFit = true;
+
+  function refresh(){
+    setStatus('Fetching latest samples…');
+    fetch(SHEET_URL).then(function(r){
+      if (!r.ok) throw new Error('HTTP ' + r.status);
+      return r.json();
+    }).then(function(data){
+      markers.clearLayers();
+      const pts = [];
+      data.forEach(function(s){
+        let lat = parseFloat(s.lat), lng = parseFloat(s.lng);
+        if (isNaN(lat) && STATIONS[s.station]) { lat = STATIONS[s.station][0]; lng = STATIONS[s.station][1]; }
+        if (isNaN(lat)) return;
+        pts.push([lat, lng]);
+        const m = L.circleMarker([lat, lng], { radius: 9, color:'#fff', weight:2,
+          fillColor: colors[s.status] || '#95a5a6', fillOpacity: 0.9 });
+        m.bindPopup('<b>' + s.station + ' #' + s.id + '</b><br>pH: ' + s.ph +
+          ' | NTU: ' + s.turb + '<br>Score: ' + s.score + ' — <b>' + s.status +
+          '</b><br>' + s.advice + '<br><i>' + new Date(s.time).toLocaleString() + '</i>');
+        markers.addLayer(m);
+      });
+      if (pts.length === 0) {
+        setStatus('Map OK but 0 samples with coordinates. Check Sheet lat/lng columns or STATIONS name match.', true);
+      } else {
+        setStatus('Live: ' + pts.length + ' samples — auto-refresh 30 s');
+        if (firstFit) { map.fitBounds(pts, { padding:[40,40] }); firstFit = false; }
+      }
+    }).catch(function(err){
+      setStatus('Data error: ' + err.message + ' — check Apps Script access = "Anyone" and that SHEET_URL ends with /exec', true);
+    });
+  }
+  refresh();
+  setInterval(refresh, 30000);
+
+  const legend = L.control({ position:'bottomright' });
+  legend.onAdd = function(){
+    const d = L.DomUtil.create('div','legend');
+    d.innerHTML = '<b>SafeWater</b><br><span style="color:#2ecc71">●</span> Safe<br>' +
+                  '<span style="color:#f1c40f">●</span> Caution<br><span style="color:#e74c3c">●</span> Unsafe';
+    return d;
+  };
+  legend.addTo(map);
+}
+</script>
+</body>
+</html>('map').setView([12.9716, 77.5946], 14);
 L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png',
             { attribution: '© OpenStreetMap' }).addTo(map);
 
