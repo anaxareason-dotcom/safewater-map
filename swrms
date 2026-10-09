@@ -19,7 +19,7 @@
 <div id="status">Loading map engine…</div>
 <div id="map"></div>
 <script>
-const SHEET_URL = "https://script.google.com/macros/s/AKfycbyxC3lodKK-W_GHojDVacnA0bIHFQyo4qmmFwFDPqKOza4YudpchSbO_h6ASy-JzxCu/exec";   // <-- your /exec URL
+const SHEET_URL = "https://script.google.com/macros/s/AKfycbw2ftqL0wbWLvCNQ_PQZ3shYLhLqhp1rKftJ66O6oLdeok2L9MHAAZ26lvDenX5-ios/exec";   // <-- your /exec URL
 const STATIONS = { "Buoy-01": [12.9716, 77.5946] };                     // <-- your coords + exact station name
 
 function setStatus(msg, bad){
