@@ -1,0 +1,56 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="utf-8"/>
+<meta name="viewport" content="width=device-width, initial-scale=1"/>
+<title>SafeWater Live Map</title>
+<link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css"/>
+<script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+<style> html,body,#map{height:100%;margin:0}
+ .legend{background:#fff;padding:8px 12px;border-radius:8px;font:14px sans-serif;box-shadow:0 0 6px rgba(0,0,0,.3)}
+</style>
+</head>
+<body>
+<div id="map"></div>
+<script>
+const SHEET_URL = "https://script.google.com/macros/s/AKfycbyxC3lodKK-W_GHojDVacnA0bIHFQyo4qmmFwFDPqKOza4YudpchSbO_h6ASy-JzxCu/exec"; 
+const STATIONS = { "Buoy-01": [12.9716, 77.5946] }; // fallback for rows without GPS
+
+const map = L.map('map').setView([12.9716, 77.5946], 14);
+L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png',
+            { attribution: '© OpenStreetMap' }).addTo(map);
+
+const colors = { SAFE:'#2ecc71', CAUTION:'#f1c40f', UNSAFE:'#e74c3c' };
+const markers = L.layerGroup().addTo(map);
+let firstFit = true;
+
+function refresh(){
+  fetch(SHEET_URL).then(r => r.json()).then(data => {
+    markers.clearLayers();
+    const pts = [];
+    data.forEach(s => {
+      let lat = parseFloat(s.lat), lng = parseFloat(s.lng);
+      if (isNaN(lat) && STATIONS[s.station]) { lat = STATIONS[s.station][0]; lng = STATIONS[s.station][1]; }
+      if (isNaN(lat)) return;
+      pts.push([lat, lng]);
+      const m = L.circleMarker([lat, lng], { radius: 9, color:'#fff', weight: 2,
+        fillColor: colors[s.status] || '#95a5a6', fillOpacity: 0.9 });
+      m.bindPopup(`<b>${s.station} #${s.id}</b><br>pH: ${s.ph} | NTU: ${s.turb}<br>` +
+                  `Score: ${s.score} — <b>${s.status}</b><br>${s.advice}<br>` +
+                  `<i>${new Date(s.time).toLocaleString()}</i>`);
+      markers.addLayer(m);
+    });
+    if (firstFit && pts.length) { map.fitBounds(pts, { padding:[40,40] }); firstFit = false; }
+  }).catch(e => console.error(e));
+}
+refresh(); setInterval(refresh, 30000);   // auto-refresh every 30 s
+
+const legend = L.control({ position:'bottomright' });
+legend.onAdd = function(){ const d = L.DomUtil.create('div','legend');
+  d.innerHTML = '<b>SafeWater</b><br><span style="color:#2ecc71">●</span> Safe ' +
+                '<br><span style="color:#f1c40f">●</span> Caution <br><span style="color:#e74c3c">●</span> Unsafe';
+  return d; };
+legend.addTo(map);
+</script>
+</body>
+</html>
